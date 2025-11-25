@@ -1,0 +1,16 @@
+"""Main application window."""
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                             QPushButton, QLabel, QFileDialog, QMessageBox,
+                             QProgressBar, QStatusBar, QMenuBar, QMenu, QAction,
+                             QLineEdit, QScrollArea, QSplitter)
+from PyQt5.QtCore import Qt, pyqtSlot
+from PyQt5.QtGui import QIcon
+from pathlib import Path
+import os
+
+from config.settings import AppConfig
+from models.video_task import VideoTask
+from core.queue_manager import QueueManager
+from ui.widgets import (ProcessingParamsPanel, CodecSettingsPanel, 
+                       TaskTableWidget, TextOverlayPanel, MediaOverlayPanel)
+from utils.system_check import check_ffmpeg, check_nvenc_support, get_video_info, parse_duration
