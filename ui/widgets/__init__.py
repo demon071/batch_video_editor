@@ -9,7 +9,9 @@ from .intro_video_panel import IntroVideoPanel
 from .outro_video_panel import OutroVideoPanel
 from .stacking_panel import StackingPanel
 from .background_frame_panel import BackgroundFramePanel
+from .split_panel import SplitPanel
 
 __all__ = ['TaskTableWidget', 'ProcessingParamsPanel', 'CodecSettingsPanel', 
            'TextOverlayPanel', 'ImageOverlayPanel', 'VideoOverlayPanel',
-           'IntroVideoPanel', 'OutroVideoPanel', 'StackingPanel', 'BackgroundFramePanel']
+           'IntroVideoPanel', 'OutroVideoPanel', 'StackingPanel', 
+           'BackgroundFramePanel', 'SplitPanel']

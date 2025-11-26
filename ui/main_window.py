@@ -13,7 +13,8 @@ from models.video_task import VideoTask
 from core.queue_manager import QueueManager
 from ui.widgets import (ProcessingParamsPanel, CodecSettingsPanel, TaskTableWidget,
                        TextOverlayPanel, ImageOverlayPanel, VideoOverlayPanel,
-                       IntroVideoPanel, OutroVideoPanel, StackingPanel, BackgroundFramePanel)
+                       IntroVideoPanel, OutroVideoPanel, StackingPanel, BackgroundFramePanel,
+                       SplitPanel)
 from utils.system_check import check_ffmpeg, check_nvenc_support, get_video_info, parse_duration
 class MainWindow(QMainWindow):
     """
@@ -138,6 +139,10 @@ class MainWindow(QMainWindow):
         self.background_frame_panel = BackgroundFramePanel()
         settings_layout.addWidget(self.background_frame_panel)
         
+        # Split panel
+        self.split_panel = SplitPanel()
+        settings_layout.addWidget(self.split_panel)
+        
         settings_layout.addStretch()
         scroll.setWidget(settings_widget)
         right_layout.addWidget(scroll)
@@ -227,7 +232,9 @@ class MainWindow(QMainWindow):
         self.queue_manager.task_started.connect(self._on_task_started)
         self.queue_manager.task_progress.connect(self._on_task_progress)
         self.queue_manager.task_completed.connect(self._on_task_completed)
+        self.queue_manager.task_completed.connect(self._on_task_completed)
         self.queue_manager.task_failed.connect(self._on_task_failed)
+        self.queue_manager.task_added.connect(self._on_task_added)
         
         # Task table signals
         self.task_table.task_retry_requested.connect(self._retry_task)
@@ -422,6 +429,9 @@ class MainWindow(QMainWindow):
             # Add background frame settings
             task.background_frame = self.background_frame_panel.get_settings()
             
+            # Add split settings
+            task.split_settings = self.split_panel.get_settings()
+            
             # Add to queue and table
             self.queue_manager.add_task(task)
             self.task_table.add_task(task)
@@ -499,6 +509,9 @@ class MainWindow(QMainWindow):
             
             # Update background frame settings
             task.background_frame = self.background_frame_panel.get_settings()
+            
+            # Update split settings
+            task.split_settings = self.split_panel.get_settings()
             
             # Update task in table
             self.task_table.update_task(task)
@@ -633,7 +646,12 @@ class MainWindow(QMainWindow):
         """Handle task completed."""
         self.task_table.update_task(task)
     
-    @pyqtSlot(VideoTask, str)
+    @pyqtSlot(VideoTask)
+    def _on_task_added(self, task: VideoTask):
+        """Handle new task added dynamically."""
+        self.task_table.add_task(task)
+        self._update_status_bar(f"Added split part: {task.filename}")
+    
     def _on_task_failed(self, task: VideoTask, error: str):
         """Handle task failed."""
         self.task_table.update_task(task)

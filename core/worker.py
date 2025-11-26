@@ -4,7 +4,9 @@ import subprocess
 from pathlib import Path
 from PyQt5.QtCore import QObject, QProcess, pyqtSignal
 from models.video_task import VideoTask
+from models.enums import SplitMode
 from core.ffmpeg_builder_python import FFmpegPythonBuilder as FFmpegCommandBuilder
+from core.ffmpeg_splitter import FFmpegSplitter
 
 
 class FFmpegWorker(QObject):
@@ -20,6 +22,7 @@ class FFmpegWorker(QObject):
     task_completed = pyqtSignal()
     task_failed = pyqtSignal(str)  # Error message
     log_message = pyqtSignal(str)  # Log output
+    split_parts_created = pyqtSignal(list)  # List[VideoTask] - split part tasks
     
     def __init__(self, task: VideoTask, parent=None):
         """
@@ -38,6 +41,12 @@ class FFmpegWorker(QObject):
     
     def start(self):
         """Start FFmpeg processing."""
+        # Check if this is a split task
+        if self.task.split_settings and self.task.split_settings.enabled:
+            self._process_split_task()
+            return
+        
+        # Normal processing
         # Validate task
         is_valid, error_msg = FFmpegCommandBuilder.validate_task(self.task)
         if not is_valid:
@@ -66,6 +75,142 @@ class FFmpegWorker(QObject):
         except Exception as e:
             self.is_running = False
             self.task_failed.emit(f"Failed to start FFmpeg: {str(e)}")
+    
+    def _process_split_task(self):
+        """Process video splitting task."""
+        try:
+            # Validate split task
+            is_valid, error_msg = FFmpegSplitter.validate_task(self.task)
+            if not is_valid:
+                self.task_failed.emit(error_msg)
+                return
+            
+            # Set running flag
+            self.is_running = True
+            
+            # Split video using FFmpegSplitter
+            # This is synchronous but fast (stream copy)
+            output_files = FFmpegSplitter.split_video(self.task)
+            
+            # Update progress
+            self.progress_updated.emit(100.0)
+            
+            # Log success
+            self.log_message.emit(
+                f"Split complete: {len(output_files)} parts created\n" +
+                "\n".join([f"  - {f.name}" for f in output_files])
+            )
+            
+            # Check if we should process split parts
+            if self.task.split_settings.process_split_parts:
+                # Create processing tasks for each split part
+                split_tasks = self._create_split_part_tasks(output_files)
+                
+                # Emit signal with new tasks
+                if split_tasks:
+                    self.split_parts_created.emit(split_tasks)
+                    self.log_message.emit(
+                        f"\nCreated {len(split_tasks)} processing tasks for split parts"
+                    )
+            
+            # Mark as complete
+            self.is_running = False
+            self.task_completed.emit()
+            
+        except Exception as e:
+            self.is_running = False
+            error_msg = f"Split failed: {str(e)}"
+            print(f"\nERROR: {error_msg}")
+            self.task_failed.emit(error_msg)
+    
+    def _create_split_part_tasks(self, split_files: list) -> list:
+        """
+        Create processing tasks for split parts.
+        
+        Args:
+            split_files: List of split file paths
+            
+        Returns:
+            List of VideoTask objects for processing split parts
+        """
+        tasks = []
+        
+        for split_file in split_files:
+            # Clone task settings for this split part
+            part_task = self._clone_task_for_split_part(split_file)
+            if part_task:
+                tasks.append(part_task)
+        
+        return tasks
+    
+    def _clone_task_for_split_part(self, input_file: Path):
+        """
+        Clone task settings for a split part.
+        
+        Args:
+            input_file: Path to split part file
+            
+        Returns:
+            VideoTask with cloned settings
+        """
+        try:
+            # Create output path
+            output_dir = self.task.output_path.parent
+            output_file = output_dir / f"{input_file.stem}_processed{input_file.suffix}"
+            
+            # Create new task with same settings (except split settings)
+            from utils.system_check import get_video_info
+            info = get_video_info(input_file)
+            
+            task = VideoTask(
+                input_path=input_file,
+                output_path=output_file,
+                # Copy processing parameters
+                speed=self.task.speed,
+                volume=self.task.volume,
+                trim_start=self.task.trim_start,
+                cut_from_end=self.task.cut_from_end,
+                scale=self.task.scale,
+                crop=self.task.crop,
+                # Copy watermark settings
+                watermark_type=self.task.watermark_type,
+                watermark_text=self.task.watermark_text,
+                watermark_image=self.task.watermark_image,
+                watermark_position=self.task.watermark_position,
+                # Copy subtitle settings
+                subtitle_file=self.task.subtitle_file,
+                # Copy text overlay settings
+                text_settings=self.task.text_settings,
+                # Copy media overlay settings
+                image_overlay=self.task.image_overlay,
+                video_overlay=self.task.video_overlay,
+                intro_video=self.task.intro_video,
+                outro_video=self.task.outro_video,
+                # Copy stacking settings
+                stack_settings=self.task.stack_settings,
+                # Copy background frame settings
+                background_frame=self.task.background_frame,
+                # Copy codec settings
+                codec=self.task.codec,
+                quality_mode=self.task.quality_mode,
+                crf=self.task.crf,
+                bitrate=self.task.bitrate,
+                preset=self.task.preset,
+                # Set video info
+                duration=info['duration'] if info else 0.0,
+                original_resolution=(info['width'], info['height']) if info else None,
+                # IMPORTANT: Don't split again!
+                split_settings=None
+            )
+            
+            # Store reference to intermediate file for cleanup
+            task.intermediate_file = input_file
+            
+            return task
+            
+        except Exception as e:
+            self.log_message.emit(f"Warning: Failed to create task for {input_file.name}: {str(e)}")
+            return None
     
     def stop(self):
         """Stop FFmpeg processing."""

@@ -96,6 +96,12 @@ class VideoTask:
     bitrate: str = "5M"
     preset: Preset = Preset.MEDIUM
     
+    # Split settings
+    split_settings: Optional['SplitSettings'] = None
+    
+    # Intermediate file for cleanup (used by split-then-process)
+    intermediate_file: Optional[Path] = None
+    
     # Metadata
     duration: float = 0.0
     original_resolution: Optional[Tuple[int, int]] = None

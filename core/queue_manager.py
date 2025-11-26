@@ -23,6 +23,7 @@ class QueueManager(QObject):
     task_progress = pyqtSignal(VideoTask, float)  # task, progress
     task_completed = pyqtSignal(VideoTask)
     task_failed = pyqtSignal(VideoTask, str)  # task, error_message
+    task_added = pyqtSignal(VideoTask)  # New task added dynamically
     
     def __init__(self, parent=None):
         """
@@ -182,9 +183,21 @@ class QueueManager(QObject):
         self.current_worker.task_failed.connect(
             lambda error: self._on_task_failed(task, error)
         )
+        self.current_worker.split_parts_created.connect(self._on_split_parts_created)
         
         # Start worker
         self.current_worker.start()
+    
+    def _on_split_parts_created(self, split_tasks: List[VideoTask]):
+        """
+        Handle split parts created by worker.
+        
+        Args:
+            split_tasks: List of new VideoTask objects
+        """
+        for task in split_tasks:
+            self.add_task(task)
+            self.task_added.emit(task)
     
     def _on_task_progress(self, task: VideoTask, progress: float):
         """
@@ -211,6 +224,14 @@ class QueueManager(QObject):
         if self.current_worker:
             self.current_worker.deleteLater()
             self.current_worker = None
+        
+        # Auto-cleanup intermediate file if exists
+        if task.intermediate_file and task.intermediate_file.exists():
+            try:
+                task.intermediate_file.unlink()
+                print(f"Deleted intermediate file: {task.intermediate_file}")
+            except Exception as e:
+                print(f"Failed to delete intermediate file: {e}")
         
         # Process next task
         self._process_next_task()

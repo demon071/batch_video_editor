@@ -37,6 +37,48 @@ class FFmpegPythonBuilder:
             return FFmpegPythonBuilder._build_standard(task)
     
     @staticmethod
+    def _build_standard(task: VideoTask) -> List[str]:
+        """
+        Build standard FFmpeg command for basic processing (no complex overlays).
+        """
+        # Input options
+        input_kwargs = {}
+        if task.codec.is_gpu:
+            input_kwargs['hwaccel'] = 'cuda'
+            
+        if task.trim_start is not None:
+            input_kwargs['ss'] = task.trim_start
+            
+        # Handle trim end (absolute) or cut from end (relative)
+        if task.cut_from_end is not None and task.duration > 0:
+            input_kwargs['to'] = max(0, task.duration - task.cut_from_end)
+        elif task.trim_end is not None:
+            input_kwargs['to'] = task.trim_end
+            
+        # Input stream
+        stream = ffmpeg.input(str(task.input_path), **input_kwargs)
+        video_stream = stream.video
+        audio_stream = stream.audio
+        
+        # Apply video filters
+        video_stream = FFmpegPythonBuilder._apply_video_filters(video_stream, task)
+        
+        # Apply audio filters
+        audio_stream = FFmpegPythonBuilder._apply_audio_filters(audio_stream, task)
+        
+        # Output options
+        output_kwargs = FFmpegPythonBuilder._get_output_kwargs(task)
+        
+        # Build output
+        out = ffmpeg.output(video_stream, audio_stream, str(task.output_path), **output_kwargs)
+        out = ffmpeg.overwrite_output(out)
+        
+        # Compile command
+        cmd = ffmpeg.compile(out)
+        
+        return cmd
+
+    @staticmethod
     def _needs_overlay(task: VideoTask) -> bool:
         """Check if task requires overlay processing."""
         return (

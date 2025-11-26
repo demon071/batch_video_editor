@@ -100,3 +100,13 @@ class OverlayPosition(str, Enum):
     
     def __str__(self):
         return self.value
+
+
+class SplitMode(str, Enum):
+    """Video split modes."""
+    DISABLED = "Disabled"
+    BY_COUNT = "By Count"
+    BY_DURATION = "By Duration"
+    
+    def __str__(self):
+        return self.value
