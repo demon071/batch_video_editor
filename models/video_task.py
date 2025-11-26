@@ -83,6 +83,12 @@ class VideoTask:
     intro_video: Optional[dict] = None
     outro_video: Optional[dict] = None
     
+    # Stacking settings
+    stack_settings: Optional[dict] = None
+    
+    # Background frame settings
+    background_frame: Optional[dict] = None
+    
     # Codec settings
     codec: VideoCodec = VideoCodec.H264
     quality_mode: QualityMode = QualityMode.CRF

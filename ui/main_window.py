@@ -13,7 +13,7 @@ from models.video_task import VideoTask
 from core.queue_manager import QueueManager
 from ui.widgets import (ProcessingParamsPanel, CodecSettingsPanel, TaskTableWidget,
                        TextOverlayPanel, ImageOverlayPanel, VideoOverlayPanel,
-                       IntroVideoPanel, OutroVideoPanel)
+                       IntroVideoPanel, OutroVideoPanel, StackingPanel, BackgroundFramePanel)
 from utils.system_check import check_ffmpeg, check_nvenc_support, get_video_info, parse_duration
 class MainWindow(QMainWindow):
     """
@@ -130,6 +130,14 @@ class MainWindow(QMainWindow):
         self.outro_video_panel = OutroVideoPanel()
         settings_layout.addWidget(self.outro_video_panel)
         
+        # Stacking panel
+        self.stacking_panel = StackingPanel()
+        settings_layout.addWidget(self.stacking_panel)
+        
+        # Background frame panel
+        self.background_frame_panel = BackgroundFramePanel()
+        settings_layout.addWidget(self.background_frame_panel)
+        
         settings_layout.addStretch()
         scroll.setWidget(settings_widget)
         right_layout.addWidget(scroll)
@@ -225,6 +233,9 @@ class MainWindow(QMainWindow):
         self.task_table.task_retry_requested.connect(self._retry_task)
         self.task_table.task_remove_requested.connect(self._remove_task)
         self.task_table.task_open_output_requested.connect(self._open_output_folder)
+        
+        # Codec settings signals
+        self.codec_panel.settings_changed.connect(self._save_codec_settings)
     
     def _load_config(self):
         """Load configuration."""
@@ -234,12 +245,18 @@ class MainWindow(QMainWindow):
         if self.config.last_output_folder:
             self.output_folder_edit.setText(self.config.last_output_folder)
         
+        # Block signals while loading to prevent saving during load
+        self.codec_panel.blockSignals(True)
+        
         # Set codec settings
         self.codec_panel.set_codec(self.config.codec)
         self.codec_panel.set_quality_mode(self.config.quality_mode)
         self.codec_panel.set_crf(self.config.crf)
         self.codec_panel.set_bitrate(self.config.bitrate)
         self.codec_panel.set_preset(self.config.preset)
+        
+        # Unblock signals
+        self.codec_panel.blockSignals(False)
         
         # Check GPU support
         gpu_available, gpu_msg = check_nvenc_support()
@@ -255,6 +272,14 @@ class MainWindow(QMainWindow):
                 "FFmpeg Not Found",
                 f"{ffmpeg_msg}\n\nPlease install FFmpeg and add it to your system PATH."
             )
+    
+    def _save_codec_settings(self):
+        """Save codec settings to config when changed."""
+        self.config.codec = self.codec_panel.get_codec()
+        self.config.quality_mode = self.codec_panel.get_quality_mode()
+        self.config.crf = self.codec_panel.get_crf()
+        self.config.bitrate = self.codec_panel.get_bitrate()
+        self.config.preset = self.codec_panel.get_preset()
     
     def _browse_input_folder(self):
         """Browse for input folder."""
@@ -391,6 +416,12 @@ class MainWindow(QMainWindow):
             task.intro_video = self.intro_video_panel.get_settings()
             task.outro_video = self.outro_video_panel.get_settings()
             
+            # Add stacking settings
+            task.stack_settings = self.stacking_panel.get_settings()
+            
+            # Add background frame settings
+            task.background_frame = self.background_frame_panel.get_settings()
+            
             # Add to queue and table
             self.queue_manager.add_task(task)
             self.task_table.add_task(task)
@@ -462,6 +493,12 @@ class MainWindow(QMainWindow):
             
             # Update text overlay settings
             task.text_settings = self.text_overlay_panel.get_text_settings()
+            
+            # Update stacking settings
+            task.stack_settings = self.stacking_panel.get_settings()
+            
+            # Update background frame settings
+            task.background_frame = self.background_frame_panel.get_settings()
             
             # Update task in table
             self.task_table.update_task(task)

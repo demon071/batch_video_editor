@@ -43,73 +43,21 @@ class FFmpegPythonBuilder:
             (task.image_overlay and task.image_overlay.get('enabled', False)) or
             (task.video_overlay and task.video_overlay.get('enabled', False)) or
             (task.intro_video and task.intro_video.get('enabled', False)) or
-            (task.outro_video and task.outro_video.get('enabled', False))
+            (task.outro_video and task.outro_video.get('enabled', False)) or
+            (task.stack_settings and task.stack_settings.get('mode')) or
+            (task.background_frame and task.background_frame.get('enabled', False))
         )
-    
-    @staticmethod
-    def _build_standard(task: VideoTask) -> List[str]:
-        """
-        Build standard FFmpeg command using ffmpeg-python.
-        Used when no overlays are needed.
-        """
-        # Input options
-        input_kwargs = {}
-        if task.codec.is_gpu:
-            input_kwargs['hwaccel'] = 'cuda'
-        
-        if task.trim_start is not None:
-            input_kwargs['ss'] = task.trim_start
-            
-        # Handle trim end (absolute) or cut from end (relative)
-        if task.cut_from_end is not None and task.duration > 0:
-            # Calculate absolute end time
-            input_kwargs['to'] = max(0, task.duration - task.cut_from_end)
-        elif task.trim_end is not None:
-            input_kwargs['to'] = task.trim_end
-            
-        # Create input stream
-        stream = ffmpeg.input(str(task.input_path), **input_kwargs)
-        
-        # Split into video and audio streams
-        video = stream.video
-        audio = stream.audio
-        
-        # Apply video filters
-        video = FFmpegPythonBuilder._apply_video_filters(video, task)
-        
-        # Apply audio filters
-        audio = FFmpegPythonBuilder._apply_audio_filters(audio, task)
-        
-        # Output options
-        output_kwargs = FFmpegPythonBuilder._get_output_kwargs(task)
-        
-        # Create output
-        out = ffmpeg.output(video, audio, str(task.output_path), **output_kwargs)
-        
-        # Overwrite output
-        out = ffmpeg.overwrite_output(out)
-        
-        # Compile command
-        cmd = ffmpeg.compile(out)
-        
-        # DEBUG
-        print("\n" + "="*80)
-        print("FFmpeg Command (ffmpeg-python standard):")
-        print("="*80)
-        print(' '.join(cmd))
-        print("="*80 + "\n")
-        
-        return cmd
-    
+
     @staticmethod
     def _build_with_overlay(task: VideoTask) -> List[str]:
         """
-        Build complex FFmpeg command handling Overlays and Intro/Outro.
+        Build complex FFmpeg command handling Overlays, Intro/Outro, and Stacking.
         Pipeline:
         1. Process Main Video (Scale, Crop, Speed, Overlays, Text)
         2. Process Intro (Scale, Fade)
         3. Process Outro (Scale, Fade)
         4. Concat All
+        5. Process Stacking (if enabled)
         """
         # --- 1. Main Video Processing ---
         input_kwargs = {}
@@ -130,12 +78,95 @@ class FFmpegPythonBuilder:
         video_stream = main_input.video
         audio_stream = main_input.audio
         
+        # --- Background Frame Processing (if enabled) ---
+        background_layer = None
+        if task.background_frame and task.background_frame.get('enabled'):
+            bg_settings = task.background_frame
+            target_width, target_height = bg_settings['resolution']
+            bg_type = bg_settings['background_type']
+            
+            # Calculate duration for background
+            bg_duration = task.duration
+            if task.cut_from_end:
+                bg_duration -= task.cut_from_end
+            if task.trim_start:
+                bg_duration -= task.trim_start
+            if task.trim_end:
+                start = task.trim_start if task.trim_start else 0
+                bg_duration = task.trim_end - start
+            bg_duration = max(0.1, bg_duration)
+            
+            # Create background layer based on type
+            if bg_type == 'color':
+                # Color background
+                bg_color = bg_settings.get('background_color', '#000000').lstrip('#')
+                # Convert hex to RGB
+                r = int(bg_color[0:2], 16)
+                g = int(bg_color[2:4], 16)
+                b = int(bg_color[4:6], 16)
+                color_str = f"0x{bg_color}"
+                
+                # Create color source
+                background_layer = ffmpeg.input(
+                    f'color=c={color_str}:s={target_width}x{target_height}:d={bg_duration}',
+                    f='lavfi'
+                ).video
+                
+            elif bg_type == 'image':
+                # Image background
+                bg_path = bg_settings.get('background_path')
+                if bg_path and Path(bg_path).exists():
+                    bg_img = ffmpeg.input(str(bg_path), loop=1, t=bg_duration)
+                    background_layer = bg_img.video.filter('scale', target_width, target_height)
+                    
+            elif bg_type == 'video':
+                # Video background
+                bg_path = bg_settings.get('background_path')
+                if bg_path and Path(bg_path).exists():
+                    bg_vid = ffmpeg.input(str(bg_path), stream_loop=-1)
+                    background_layer = bg_vid.video.filter('scale', target_width, target_height)
+            
+            # If background layer was created, scale main video to fit and overlay
+            if background_layer:
+                # Scale main video to fit within target resolution (letterbox/pillarbox)
+                # Use scale with force_original_aspect_ratio=decrease to fit within bounds
+                # Then pad to center it
+                video_stream = video_stream.filter(
+                    'scale', 
+                    target_width,
+                    target_height,
+                    force_original_aspect_ratio='decrease'
+                )
+                video_stream = video_stream.filter(
+                    'pad',
+                    target_width,
+                    target_height,
+                    '(ow-iw)/2',
+                    '(oh-ih)/2',
+                    color='black'
+                )
+                
+                # Overlay scaled video on background
+                video_stream = ffmpeg.overlay(background_layer, video_stream)
+        
         # Apply basic video processing to main stream first
         # Note: We skip text overlay here to apply it BEFORE concat if possible, 
         # but usually text is on main video only. 
         # If we want text on intro/outro, we'd apply after concat.
         # Assuming text is for main video content only.
-        video_stream = FFmpegPythonBuilder._apply_video_filters(video_stream, task, skip_text=False)
+        # IMPORTANT: If background frame is enabled, we skip most filters as they were applied before overlay
+        if not (task.background_frame and task.background_frame.get('enabled')):
+            video_stream = FFmpegPythonBuilder._apply_video_filters(video_stream, task, skip_text=False)
+        else:
+            # Only apply text overlay and subtitles after background frame
+            if task.text_settings and task.text_settings.is_active():
+                drawtext_args = FFmpegPythonBuilder._get_drawtext_args(task.text_settings, task)
+                if drawtext_args:
+                    video_stream = video_stream.filter('drawtext', **drawtext_args)
+            if task.subtitle_file:
+                sub_path = str(task.subtitle_file).replace('\\', '/').replace(':', '\\:')
+                video_stream = video_stream.filter('subtitles', sub_path)
+                
         audio_stream = FFmpegPythonBuilder._apply_audio_filters(audio_stream, task)
         
         # Apply Overlays (Image/Video) to Main Video
@@ -245,8 +276,131 @@ class FFmpegPythonBuilder:
             video_stream = joined.node[0]
             audio_stream = joined.node[1]
 
-        # --- 5. Output ---
+        # --- 5. Stacking (HStack / VStack) ---
+        if task.stack_settings and task.stack_settings.get('mode'):
+            stack_mode = task.stack_settings.get('mode')
+            stack_type = task.stack_settings.get('type')
+            stack_path = task.stack_settings.get('path')
+            
+            # Calculate target duration (Main Video Duration)
+            # We use task.duration (original) minus trim
+            target_duration = task.duration
+            if task.cut_from_end:
+                target_duration -= task.cut_from_end
+            if task.trim_start:
+                target_duration -= task.trim_start
+            if task.trim_end:
+                # If trim_end is set (absolute), duration is trim_end - trim_start
+                start = task.trim_start if task.trim_start else 0
+                target_duration = task.trim_end - start
+            
+            # Ensure positive duration
+            target_duration = max(0.1, target_duration)
+            
+            stack_stream = None
+            
+            if stack_type == 'file':
+                if stack_path and Path(stack_path).exists():
+                    # Use stream_loop=-1 for infinite loop
+                    # We will rely on shortest=1 in hstack/vstack to cut to main video length
+                    stack_input = ffmpeg.input(str(stack_path), stream_loop=-1)
+                    stack_stream = stack_input.video
+                    
+            elif stack_type == 'folder':
+                if stack_path and Path(stack_path).exists():
+                    import random
+                    from utils.system_check import get_video_info
+                    
+                    video_exts = {'.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v'}
+                    all_files = [f for f in Path(stack_path).iterdir() if f.suffix.lower() in video_exts]
+                    
+                    if all_files:
+                        selected_files = []
+                        current_duration = 0
+                        
+                        # Pick files until we exceed target duration
+                        # Safety break to avoid infinite loop if files are invalid
+                        attempts = 0
+                        max_attempts = len(all_files) * 2 + 10
+                        
+                        while current_duration < target_duration and attempts < max_attempts:
+                            f = random.choice(all_files)
+                            info = get_video_info(f)
+                            if info and info.get('duration', 0) > 0:
+                                selected_files.append(f)
+                                current_duration += info['duration']
+                            attempts += 1
+                            
+                        # If we still don't have enough duration, we just use what we have
+                        # (maybe folder is empty or files invalid)
+                        
+                        if selected_files:
+                            # Create concat input
+                            # We use the concat filter
+                            concat_inputs = []
+                            for f in selected_files:
+                                inp = ffmpeg.input(str(f))
+                                # We assume we only need video from these
+                                concat_inputs.append(inp.video)
+                                # We don't care about audio from stack videos
+                                
+                            if len(concat_inputs) == 1:
+                                stack_stream = concat_inputs[0]
+                            else:
+                                # Concat video only
+                                joined = ffmpeg.concat(*concat_inputs, v=1, a=0)
+                                stack_stream = joined.node[0]
+            
+            if stack_stream:
+                # Get main video dimensions (after processing)
+                current_w, current_h = 1920, 1080 # Default fallback
+                if task.scale:
+                    current_w, current_h = task.scale
+                elif task.original_resolution:
+                    current_w, current_h = task.original_resolution
+                    
+                if task.crop:
+                    _, _, cw, ch = task.crop
+                    current_w, current_h = cw, ch
+                
+                # Scale secondary video to match main video
+                if stack_mode == 'hstack':
+                    # Match Height, keep aspect ratio for Width
+                    stack_stream = stack_stream.filter('scale', -1, current_h)
+                    
+                    # Apply hstack
+                    video_stream = ffmpeg.hstack(video_stream, stack_stream)
+                    
+                elif stack_mode == 'vstack':
+                    # Match Width, keep aspect ratio for Height
+                    stack_stream = stack_stream.filter('scale', current_w, -1)
+                    
+                    # Apply vstack
+                    video_stream = ffmpeg.vstack(video_stream, stack_stream)
+                
+                # Audio: Use ONLY Main Video Audio
+                # We do NOT mix audio from stack videos as per user request
+                # So we leave audio_stream as is (from main video)
+
+        # --- 6. Output ---
         output_kwargs = FFmpegPythonBuilder._get_output_kwargs(task)
+        
+        # If stacking is enabled, force output duration to match main video
+        if task.stack_settings and task.stack_settings.get('mode'):
+            # Calculate target duration if not already calculated
+            # (We calculated it above but it was local scope, let's recalculate or move it up)
+            # Actually, let's just recalculate to be safe and clean
+            target_duration = task.duration
+            if task.cut_from_end:
+                target_duration -= task.cut_from_end
+            if task.trim_start:
+                target_duration -= task.trim_start
+            if task.trim_end:
+                start = task.trim_start if task.trim_start else 0
+                target_duration = task.trim_end - start
+            
+            if target_duration > 0:
+                output_kwargs['t'] = target_duration
         
         # Force audio encoding for complex filtergraph
         # Streamcopy cannot be used with complex filters (concat, overlay)
