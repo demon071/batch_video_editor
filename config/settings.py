@@ -22,6 +22,7 @@ class AppConfig:
         'preset': 'MEDIUM',
         'speed': 1.0,
         'volume': 1.0,
+        'use_gpu_decoding': False,
         'window_geometry': None,
     }
     
@@ -189,3 +190,13 @@ class AppConfig:
     def volume(self, value: float):
         """Set default volume."""
         self.set('volume', value)
+        
+    @property
+    def use_gpu_decoding(self) -> bool:
+        """Get GPU decoding preference."""
+        return self.get('use_gpu_decoding', False)
+    
+    @use_gpu_decoding.setter
+    def use_gpu_decoding(self, value: bool):
+        """Set GPU decoding preference."""
+        self.set('use_gpu_decoding', value)

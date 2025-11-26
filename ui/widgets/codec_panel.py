@@ -46,6 +46,16 @@ class CodecSettingsPanel(QWidget):
         self.gpu_label.setStyleSheet("color: gray;")
         codec_layout.addWidget(self.gpu_label)
         
+        # GPU Decoding Checkbox
+        from PyQt5.QtWidgets import QCheckBox
+        self.gpu_decoding_check = QCheckBox("Use GPU for Input Decoding (Experimental)")
+        self.gpu_decoding_check.setToolTip("Enable hardware acceleration for reading input files.\n"
+                                         "Warning: May fail with newer codecs (AV1) on older GPUs.\n"
+                                         "Leave unchecked for maximum compatibility.")
+        self.gpu_decoding_check.setEnabled(False)
+        self.gpu_decoding_check.stateChanged.connect(self.settings_changed.emit)
+        codec_layout.addWidget(self.gpu_decoding_check)
+        
         codec_group.setLayout(codec_layout)
         layout.addWidget(codec_group)
         
@@ -143,9 +153,12 @@ class CodecSettingsPanel(QWidget):
         if available:
             self.gpu_label.setText("GPU: Available ✓")
             self.gpu_label.setStyleSheet("color: green;")
+            self.gpu_decoding_check.setEnabled(True)
         else:
             self.gpu_label.setText("GPU: Not available")
             self.gpu_label.setStyleSheet("color: red;")
+            self.gpu_decoding_check.setEnabled(False)
+            self.gpu_decoding_check.setChecked(False)
             
             # Disable GPU codec options
             for i in range(self.codec_combo.count()):
@@ -189,6 +202,10 @@ class CodecSettingsPanel(QWidget):
     def get_preset(self) -> Preset:
         """Get encoding preset."""
         return self.preset_combo.currentData()
+        
+    def get_gpu_decoding(self) -> bool:
+        """Get GPU decoding status."""
+        return self.gpu_decoding_check.isChecked()
     
     # Setters
     
@@ -198,6 +215,11 @@ class CodecSettingsPanel(QWidget):
             if self.codec_combo.itemData(i) == codec:
                 self.codec_combo.setCurrentIndex(i)
                 break
+                
+    def set_gpu_decoding(self, enabled: bool):
+        """Set GPU decoding status."""
+        if self.gpu_available:
+            self.gpu_decoding_check.setChecked(enabled)
     
     def set_quality_mode(self, mode: QualityMode):
         """Set quality mode."""

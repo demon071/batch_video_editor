@@ -43,7 +43,8 @@ class FFmpegPythonBuilder:
         """
         # Input options
         input_kwargs = {}
-        if task.codec.is_gpu:
+        # Use GPU for input decoding if requested (experimental)
+        if task.use_gpu_decoding and task.codec.is_gpu:
             input_kwargs['hwaccel'] = 'cuda'
             
         if task.trim_start is not None:
@@ -103,7 +104,8 @@ class FFmpegPythonBuilder:
         """
         # --- 1. Main Video Processing ---
         input_kwargs = {}
-        if task.codec.is_gpu:
+        # Use GPU for input decoding if requested (experimental)
+        if task.use_gpu_decoding and task.codec.is_gpu:
             input_kwargs['hwaccel'] = 'cuda'
         
         if task.trim_start is not None:

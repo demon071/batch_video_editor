@@ -261,6 +261,8 @@ class MainWindow(QMainWindow):
         self.codec_panel.set_crf(self.config.crf)
         self.codec_panel.set_bitrate(self.config.bitrate)
         self.codec_panel.set_preset(self.config.preset)
+        self.codec_panel.set_gpu_decoding(self.config.use_gpu_decoding)
+        self.codec_panel.set_preset(self.config.preset)
         
         # Unblock signals
         self.codec_panel.blockSignals(False)
@@ -287,6 +289,7 @@ class MainWindow(QMainWindow):
         self.config.crf = self.codec_panel.get_crf()
         self.config.bitrate = self.codec_panel.get_bitrate()
         self.config.preset = self.codec_panel.get_preset()
+        self.config.use_gpu_decoding = self.codec_panel.get_gpu_decoding()
     
     def _browse_input_folder(self):
         """Browse for input folder."""
@@ -389,7 +392,6 @@ class MainWindow(QMainWindow):
                 scale=self.params_panel.get_scale(),
                 crop=self.params_panel.get_crop(),
                 watermark_type=self.params_panel.get_watermark_type(),
-                watermark_text=self.params_panel.get_watermark_text(),
                 watermark_image=self.params_panel.get_watermark_image(),
                 watermark_position=self.params_panel.get_watermark_position(),
                 subtitle_file=self.params_panel.get_subtitle_file(),
@@ -397,7 +399,8 @@ class MainWindow(QMainWindow):
                 quality_mode=self.codec_panel.get_quality_mode(),
                 crf=self.codec_panel.get_crf(),
                 bitrate=self.codec_panel.get_bitrate(),
-                preset=self.codec_panel.get_preset()
+                preset=self.codec_panel.get_preset(),
+                use_gpu_decoding=self.codec_panel.get_gpu_decoding()
             )
             
             # Parse trim times
@@ -489,25 +492,6 @@ class MainWindow(QMainWindow):
                 task.trim_start = None
             
             cut_end = self.params_panel.get_cut_from_end()
-            if cut_end > 0:
-                task.cut_from_end = cut_end
-            else:
-                task.cut_from_end = None
-            
-            # Update codec settings
-            task.codec = self.codec_panel.get_codec()
-            task.quality_mode = self.codec_panel.get_quality_mode()
-            task.crf = self.codec_panel.get_crf()
-            task.bitrate = self.codec_panel.get_bitrate()
-            task.preset = self.codec_panel.get_preset()
-            
-            # Update text overlay settings
-            task.text_settings = self.text_overlay_panel.get_text_settings()
-            
-            # Update stacking settings
-            task.stack_settings = self.stacking_panel.get_settings()
-            
-            # Update background frame settings
             task.background_frame = self.background_frame_panel.get_settings()
             
             # Update split settings

@@ -95,6 +95,7 @@ class VideoTask:
     crf: int = 23
     bitrate: str = "5M"
     preset: Preset = Preset.MEDIUM
+    use_gpu_decoding: bool = False
     
     # Split settings
     split_settings: Optional['SplitSettings'] = None
