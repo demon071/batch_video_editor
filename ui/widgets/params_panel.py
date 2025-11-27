@@ -210,6 +210,23 @@ class ProcessingParamsPanel(QWidget):
         subtitle_group.setLayout(subtitle_layout)
         layout.addWidget(subtitle_group)
         
+        # Connect signals
+        self.trim_start_spin.valueChanged.connect(lambda: self.params_changed.emit())
+        self.trim_end_spin.valueChanged.connect(lambda: self.params_changed.emit())
+        self.scale_combo.currentTextChanged.connect(lambda: self.params_changed.emit())
+        
+        self.crop_x_spin.valueChanged.connect(lambda: self.params_changed.emit())
+        self.crop_y_spin.valueChanged.connect(lambda: self.params_changed.emit())
+        self.crop_width_spin.valueChanged.connect(lambda: self.params_changed.emit())
+        self.crop_height_spin.valueChanged.connect(lambda: self.params_changed.emit())
+        
+        self.watermark_text_edit.textChanged.connect(lambda: self.params_changed.emit())
+        self.watermark_image_edit.textChanged.connect(lambda: self.params_changed.emit())
+        self.watermark_x_spin.valueChanged.connect(lambda: self.params_changed.emit())
+        self.watermark_y_spin.valueChanged.connect(lambda: self.params_changed.emit())
+        
+        self.subtitle_edit.textChanged.connect(lambda: self.params_changed.emit())
+        
         layout.addStretch()
     
     def _update_speed_label(self, value):
