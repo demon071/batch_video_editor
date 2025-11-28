@@ -109,6 +109,27 @@ class ProjectBrowserWidget(QWidget):
         self.task_list.itemSelectionChanged.connect(self._on_selection_changed)
         self.task_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.task_list.customContextMenuRequested.connect(self._show_context_menu)
+        
+        # Apply dark theme
+        self.task_list.setStyleSheet("""
+            QListWidget {
+                background-color: #2b2b2b;
+                alternate-background-color: #333333;
+                color: #e0e0e0;
+                border: 1px solid #555555;
+            }
+            QListWidget::item {
+                padding: 5px;
+                border-bottom: 1px solid #444444;
+            }
+            QListWidget::item:selected {
+                background-color: #4CAF50;
+                color: white;
+            }
+            QListWidget::item:hover {
+                background-color: #3a3a3a;
+            }
+        """)
         layout.addWidget(self.task_list)
         
         # Action buttons

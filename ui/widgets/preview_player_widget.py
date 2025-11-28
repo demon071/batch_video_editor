@@ -112,11 +112,7 @@ class PreviewPlayerWidget(QWidget):
         # Instead of reading raw frame, use renderer
         self.refresh_preview()
         
-        # Update time label
-        fps = self.video_capture.get(cv2.CAP_PROP_FPS)
-        if fps > 0:
-            timestamp = frame_number / fps
-            self.time_current_label.setText(self._format_time(timestamp))
+
     
     def _init_ui(self):
         """Initialize UI components."""
@@ -146,52 +142,7 @@ class PreviewPlayerWidget(QWidget):
         self._show_placeholder()
         layout.addWidget(self.preview_label, 1)
         
-        # Timeline scrubber
-        timeline_layout = QHBoxLayout()
-        
-        self.time_current_label = QLabel("0:00")
-        self.time_current_label.setMinimumWidth(50)
-        timeline_layout.addWidget(self.time_current_label)
-        
-        self.timeline_slider = QSlider(Qt.Horizontal)
-        self.timeline_slider.setMinimum(0)
-        self.timeline_slider.setMaximum(1000)
-        self.timeline_slider.setValue(0)
-        self.timeline_slider.sliderReleased.connect(self._on_seek)
-        timeline_layout.addWidget(self.timeline_slider)
-        
-        self.time_total_label = QLabel("0:00")
-        self.time_total_label.setMinimumWidth(50)
-        timeline_layout.addWidget(self.time_total_label)
-        
-        layout.addLayout(timeline_layout)
-        
-        # Control buttons
-        controls_layout = QHBoxLayout()
-        controls_layout.addStretch()
-        
-        self.prev_frame_btn = QPushButton("◀◀")
-        self.prev_frame_btn.setToolTip("Previous Frame")
-        self.prev_frame_btn.setMaximumWidth(50)
-        self.prev_frame_btn.clicked.connect(self._prev_frame)
-        self.prev_frame_btn.setEnabled(False)
-        controls_layout.addWidget(self.prev_frame_btn)
-        
-        self.play_btn = QPushButton("▶")
-        self.play_btn.setToolTip("Play/Pause")
-        self.play_btn.setMaximumWidth(50)
-        self.play_btn.setEnabled(False)
-        controls_layout.addWidget(self.play_btn)
-        
-        self.next_frame_btn = QPushButton("▶▶")
-        self.next_frame_btn.setToolTip("Next Frame")
-        self.next_frame_btn.setMaximumWidth(50)
-        self.next_frame_btn.clicked.connect(self._next_frame)
-        self.next_frame_btn.setEnabled(False)
-        controls_layout.addWidget(self.next_frame_btn)
-        
-        controls_layout.addStretch()
-        layout.addLayout(controls_layout)
+
     
     def set_task(self, task: Optional[VideoTask]):
         """Set the current task to preview."""
@@ -209,13 +160,7 @@ class PreviewPlayerWidget(QWidget):
         else:
             self.info_label.setText("")
         
-        # Update timeline
-        if task.duration > 0:
-            self.time_total_label.setText(self._format_time(task.duration))
-            self.timeline_slider.setEnabled(True)
-        else:
-            self.time_total_label.setText("0:00")
-            self.timeline_slider.setEnabled(False)
+
         
         # Load video for preview
         self._load_video(task.input_path)
@@ -232,11 +177,7 @@ class PreviewPlayerWidget(QWidget):
         self.current_pixmap = pixmap
         self._display_pixmap(pixmap)
         
-        # Update timeline
-        self.time_current_label.setText(self._format_time(timestamp))
-        if self.current_task and self.current_task.duration > 0:
-            progress = int((timestamp / self.current_task.duration) * 1000)
-            self.timeline_slider.setValue(progress)
+
     
     def clear_render_preview(self):
         """Clear render preview and return to input preview."""
@@ -272,10 +213,6 @@ class PreviewPlayerWidget(QWidget):
             # Extract and show first frame
             self._show_frame_at_position(0)
             
-            # Enable controls
-            self.prev_frame_btn.setEnabled(True)
-            self.next_frame_btn.setEnabled(True)
-            
         except Exception as e:
             print(f"Error loading video: {e}")
             self._show_placeholder(f"Error: {str(e)}")
@@ -296,11 +233,7 @@ class PreviewPlayerWidget(QWidget):
         # Instead of reading raw frame, use renderer
         self.refresh_preview()
         
-        # Update time label
-        fps = self.video_capture.get(cv2.CAP_PROP_FPS)
-        if fps > 0:
-            timestamp = frame_number / fps
-            self.time_current_label.setText(self._format_time(timestamp))
+
     
     def _display_pixmap(self, pixmap: QPixmap):
         """Display pixmap scaled to fit preview area."""
@@ -335,29 +268,7 @@ class PreviewPlayerWidget(QWidget):
             self.video_capture.release()
             self.video_capture = None
     
-    def _on_seek(self):
-        """Handle timeline seek."""
-        if not self.is_rendering:
-            position = self.timeline_slider.value()
-            self._show_frame_at_position(position)
-    
-    def _prev_frame(self):
-        """Go to previous frame."""
-        current = self.timeline_slider.value()
-        self.timeline_slider.setValue(max(0, current - 10))
-        self._on_seek()
-    
-    def _next_frame(self):
-        """Go to next frame."""
-        current = self.timeline_slider.value()
-        self.timeline_slider.setValue(min(1000, current + 10))
-        self._on_seek()
-    
-    def _format_time(self, seconds: float) -> str:
-        """Format seconds as MM:SS."""
-        minutes = int(seconds // 60)
-        secs = int(seconds % 60)
-        return f"{minutes}:{secs:02d}"
+
     
     def resizeEvent(self, event):
         """Handle resize event."""

@@ -58,6 +58,34 @@ class TaskTableWidget(QTableWidget):
         self.setAlternatingRowColors(True)
         self.setEditTriggers(QTableWidget.NoEditTriggers)
         
+        # Apply dark theme
+        self.setStyleSheet("""
+            QTableWidget {
+                background-color: #2b2b2b;
+                alternate-background-color: #333333;
+                color: #e0e0e0;
+                gridline-color: #444444;
+                border: 1px solid #555555;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+            QTableWidget::item:selected {
+                background-color: #4CAF50;
+                color: white;
+            }
+            QTableWidget::item:hover {
+                background-color: #3a3a3a;
+            }
+            QHeaderView::section {
+                background-color: #3c3c3c;
+                color: #e0e0e0;
+                padding: 5px;
+                border: 1px solid #555555;
+                font-weight: bold;
+            }
+        """)
+        
         # Enable context menu
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
