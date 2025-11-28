@@ -634,7 +634,8 @@ class MainWindow(QMainWindow):
         self._update_status(f"Loaded {len(video_files)} video(s)")
     
     def _create_tasks(self, video_files: list, output_folder: Path):
-        """Create tasks from video files."""
+        """Create tasks from video files asynchronously."""
+        # Gather all settings
         params_panel = self.properties_panel.get_params_panel()
         codec_panel = self.properties_panel.get_codec_panel()
         text_panel = self.properties_panel.get_text_overlay_panel()
@@ -646,63 +647,62 @@ class MainWindow(QMainWindow):
         background_panel = self.properties_panel.get_background_frame_panel()
         split_panel = self.properties_panel.get_split_panel()
         
-        for video_file in video_files:
-            # Get video info
-            info = get_video_info(video_file)
-            
-            # Create output path
-            output_file = output_folder / f"{video_file.stem}_processed{video_file.suffix}"
-            
-            # Create task
-            task = VideoTask(
-                input_path=video_file,
-                output_path=output_file,
-                speed=params_panel.get_speed(),
-                volume=params_panel.get_volume(),
-                scale=params_panel.get_scale(),
-                crop=params_panel.get_crop(),
-                watermark_type=params_panel.get_watermark_type(),
-                watermark_image=params_panel.get_watermark_image(),
-                watermark_position=params_panel.get_watermark_position(),
-                subtitle_file=params_panel.get_subtitle_file(),
-                codec=codec_panel.get_codec(),
-                quality_mode=codec_panel.get_quality_mode(),
-                crf=codec_panel.get_crf(),
-                bitrate=codec_panel.get_bitrate(),
-                preset=codec_panel.get_preset(),
-                use_gpu_decoding=codec_panel.get_gpu_decoding()
-            )
-            
-            # Parse trim times
-            trim_start = params_panel.get_trim_start()
-            if trim_start > 0:
-                task.trim_start = trim_start
-            
-            cut_end = params_panel.get_cut_from_end()
-            if cut_end > 0:
-                task.cut_from_end = cut_end
-            
-            # Set video info
-            if info:
-                task.duration = info['duration']
-                task.original_resolution = (info['width'], info['height'])
-            
-            # Add overlay settings
-            task.text_settings = text_panel.get_text_settings()
-            task.image_overlay = image_panel.get_settings()
-            task.video_overlay = video_panel.get_settings()
-            task.intro_video = intro_panel.get_settings()
-            task.outro_video = outro_panel.get_settings()
-            task.stack_settings = stacking_panel.get_settings()
-            task.background_frame = background_panel.get_settings()
-            task.split_settings = split_panel.get_settings()
-            
-            # Add to queue and browser
-            self.queue_manager.add_task(task)
-            self.project_browser.add_task(task)
+        settings = {
+            'speed': params_panel.get_speed(),
+            'volume': params_panel.get_volume(),
+            'scale': params_panel.get_scale(),
+            'crop': params_panel.get_crop(),
+            'watermark_type': params_panel.get_watermark_type(),
+            'watermark_image': params_panel.get_watermark_image(),
+            'watermark_position': params_panel.get_watermark_position(),
+            'watermark_text': params_panel.get_watermark_text(),
+            'subtitle_file': params_panel.get_subtitle_file(),
+            'codec': codec_panel.get_codec(),
+            'quality_mode': codec_panel.get_quality_mode(),
+            'crf': codec_panel.get_crf(),
+            'bitrate': codec_panel.get_bitrate(),
+            'preset': codec_panel.get_preset(),
+            'use_gpu_decoding': codec_panel.get_gpu_decoding(),
+            'text_settings': text_panel.get_text_settings(),
+            'image_overlay': image_panel.get_settings(),
+            'video_overlay': video_panel.get_settings(),
+            'intro_video': intro_panel.get_settings(),
+            'outro_video': outro_panel.get_settings(),
+            'stack_settings': stacking_panel.get_settings(),
+            'background_frame': background_panel.get_settings(),
+            'split_settings': split_panel.get_settings()
+        }
         
-        self.start_btn.setEnabled(True)
+        trim_start = params_panel.get_trim_start()
+        if trim_start > 0:
+            settings['trim_start'] = trim_start
+            
+        cut_end = params_panel.get_cut_from_end()
+        if cut_end > 0:
+            settings['cut_from_end'] = cut_end
+            
+        # Start worker
+        from ui.workers.task_loader_worker import TaskLoaderWorker
+        
+        # Disable UI during load if needed, or just show status
+        self._update_status(f"Loading {len(video_files)} tasks...")
+        
+        self.loader_worker = TaskLoaderWorker(video_files, output_folder, settings)
+        self.loader_worker.task_loaded.connect(self._on_task_loaded)
+        self.loader_worker.finished.connect(self._on_loading_finished)
+        self.loader_worker.start()
+        
+    def _on_task_loaded(self, task):
+        """Handle loaded task."""
+        self.queue_manager.add_task(task)
+        self.project_browser.add_task(task)
         self._update_task_count()
+        
+    def _on_loading_finished(self):
+        """Handle loading completion."""
+        self.start_btn.setEnabled(True)
+        self._update_status("Tasks loaded successfully")
+        self.loader_worker = None
     
     def _on_settings_changed(self):
         """Handle settings changes from properties panel."""
@@ -807,6 +807,8 @@ class MainWindow(QMainWindow):
             task.split_settings = split_panel.get_settings()
             
             self.project_browser.update_task(task)
+        
+        self.preview_player.refresh_preview()
         
         self._update_status(f"Settings applied to {len(tasks)} tasks")
         QMessageBox.information(self, "Settings Applied", f"Successfully applied settings to {len(tasks)} tasks!")

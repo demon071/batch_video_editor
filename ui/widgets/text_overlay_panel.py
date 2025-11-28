@@ -207,7 +207,7 @@ class TextOverlayPanel(QWidget):
         # We just need to store the font list for path lookup
         try:
             self.system_fonts = get_system_fonts()
-            print(f"DEBUG: Loaded {len(self.system_fonts)} fonts from system")
+            # print(f"DEBUG: Loaded {len(self.system_fonts)} fonts from system")
         except Exception as e:
             print(f"Error loading fonts: {e}")
             self.system_fonts = []
@@ -256,8 +256,8 @@ class TextOverlayPanel(QWidget):
         current_font = self.font_combo.currentText()
         
         # DEBUG: Show font selection
-        print(f"\nDEBUG: Font selection in text overlay panel")
-        print(f"  Selected font family: '{current_font}'")
+        # print(f"\nDEBUG: Font selection in text overlay panel")
+        # print(f"  Selected font family: '{current_font}'")
         
         # Try to find font file path using QFontDatabase
         font_db = QFontDatabase()
@@ -268,16 +268,17 @@ class TextOverlayPanel(QWidget):
             # Try exact match first
             if font_name == current_font:
                 font_path = Path(path)
-                print(f"  Found exact match: {font_path}")
+                # print(f"  Found exact match: {font_path}")
                 break
             # Try case-insensitive partial match
             if current_font.lower().replace(' ', '') in font_name.lower().replace(' ', ''):
                 font_path = Path(path)
-                print(f"  Found partial match: {font_name} -> {font_path}")
+                # print(f"  Found partial match: {font_name} -> {font_path}")
                 break
         
         if not font_path:
-            print(f"  WARNING: No matching font path found, will use default")
+            # print(f"  WARNING: No matching font path found, will use default")
+            pass
         
         return TextSettings(
             enabled=self.enable_checkbox.isChecked(),

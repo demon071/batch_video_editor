@@ -19,6 +19,7 @@ class TaskTableWidget(QTableWidget):
     task_retry_requested = pyqtSignal(VideoTask)
     task_remove_requested = pyqtSignal(VideoTask)
     task_open_output_requested = pyqtSignal(VideoTask)
+    task_view_settings_requested = pyqtSignal(VideoTask)
     
     # Column indices
     COL_FILENAME = 0
@@ -26,7 +27,9 @@ class TaskTableWidget(QTableWidget):
     COL_PROGRESS = 2
     COL_DURATION = 3
     COL_RESOLUTION = 4
-    COL_ERROR = 5
+    COL_SIZE = 5
+    COL_RATIO = 6
+    COL_ERROR = 7
     
     def __init__(self, parent=None):
         """Initialize task table."""
@@ -38,18 +41,20 @@ class TaskTableWidget(QTableWidget):
     
     def _init_ui(self):
         """Initialize UI components."""
-        self.setColumnCount(6)
+        self.setColumnCount(8)
         self.setHorizontalHeaderLabels([
-            "Filename", "Status", "Progress", "Duration", "Resolution", "Error"
+            "Filename", "Status", "Progress", "Duration", "Resolution", "Size", "Ratio", "Error"
         ])
         
         # Set column widths
         header = self.horizontalHeader()
-        header.resizeSection(0, 300)  # Filename
+        header.resizeSection(0, 250)  # Filename
         header.resizeSection(1, 100)  # Status
-        header.resizeSection(2, 150)  # Progress
+        header.resizeSection(2, 120)  # Progress
         header.resizeSection(3, 80)   # Duration
         header.resizeSection(4, 100)  # Resolution
+        header.resizeSection(5, 80)   # Size
+        header.resizeSection(6, 60)   # Ratio
         header.setStretchLastSection(True)  # Error column stretches
         
         # Configure table
@@ -128,6 +133,23 @@ class TaskTableWidget(QTableWidget):
             resolution_text = "Unknown"
         resolution_item = QTableWidgetItem(resolution_text)
         self.setItem(row, self.COL_RESOLUTION, resolution_item)
+        
+        # Size
+        size_mb = 0
+        if task.input_path.exists():
+            size_mb = task.input_path.stat().st_size / (1024 * 1024)
+        size_item = QTableWidgetItem(f"{size_mb:.1f} MB")
+        self.setItem(row, self.COL_SIZE, size_item)
+        
+        # Ratio
+        ratio_text = "-"
+        if task.original_resolution:
+            w, h = task.original_resolution
+            if h > 0:
+                gcd = self._gcd(w, h)
+                ratio_text = f"{w//gcd}:{h//gcd}"
+        ratio_item = QTableWidgetItem(ratio_text)
+        self.setItem(row, self.COL_RATIO, ratio_item)
         
         # Error (empty initially)
         error_item = QTableWidgetItem("")
@@ -248,6 +270,13 @@ class TaskTableWidget(QTableWidget):
         
         menu = QMenu(self)
         
+        # View Settings
+        view_settings_action = QAction("View Settings", self)
+        view_settings_action.triggered.connect(lambda: self.task_view_settings_requested.emit(task))
+        menu.addAction(view_settings_action)
+        
+        menu.addSeparator()
+        
         # Show error details (only for failed tasks)
         if task.status == TaskStatus.ERROR and task.error_message:
             error_action = QAction("Show Error Details", self)
@@ -291,3 +320,9 @@ class TaskTableWidget(QTableWidget):
         msg.setText(f"Task failed: {task.filename}")
         msg.setDetailedText(task.error_message)
         msg.exec_()
+
+    def _gcd(self, a, b):
+        """Calculate Greatest Common Divisor."""
+        while b:
+            a, b = b, a % b
+        return a

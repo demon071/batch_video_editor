@@ -8,14 +8,16 @@ Displays:
 - Timeline scrubber
 """
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                             QPushButton, QSlider, QSizePolicy)
+                             QPushButton, QSlider, QSizePolicy, QStyle)
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QFont
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QFont, QImage, QIcon
 from pathlib import Path
 from typing import Optional
-import cv2
+import subprocess
+import sys
 
 from models.video_task import VideoTask
+from utils.system_check import format_duration
 
 
 class PreviewPlayerWidget(QWidget):
@@ -23,7 +25,7 @@ class PreviewPlayerWidget(QWidget):
     Preview player for video display and playback.
     
     Features:
-    - Display input video preview
+    - Display input video preview using FFmpeg
     - Display live render preview during processing
     - Timeline scrubber
     - Playback controls
@@ -40,12 +42,9 @@ class PreviewPlayerWidget(QWidget):
         super().__init__(parent)
         self.current_task: Optional[VideoTask] = None
         self.current_pixmap: Optional[QPixmap] = None
-        self.video_capture: Optional[cv2.VideoCapture] = None
         self.is_rendering = False
-        
-        # Initialize renderer
-        from utils.preview_renderer import PreviewRenderer
-        self.renderer = PreviewRenderer()
+        self.current_timestamp = 0.0
+        self.is_scrubbing = False
         
         self._init_ui()
         
@@ -54,70 +53,32 @@ class PreviewPlayerWidget(QWidget):
         if not self.current_task:
             return
             
-        # Get current timestamp and frame
-        timestamp = 0.0
-        base_pixmap = None
-        
-        if self.video_capture:
-            # Save current position
-            current_pos = self.video_capture.get(cv2.CAP_PROP_POS_FRAMES)
-            timestamp = self.video_capture.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+        # Cancel existing worker if running
+        if hasattr(self, 'preview_worker') and self.preview_worker and self.preview_worker.isRunning():
+            self.preview_worker.cancel()
             
-            # Read current frame
-            ret, frame = self.video_capture.read()
-            if ret:
-                # Convert to QPixmap
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                height, width, channel = frame.shape
-                bytes_per_line = 3 * width
-                
-                from PyQt5.QtGui import QImage
-                q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
-                base_pixmap = QPixmap.fromImage(q_image)
-                
-                # Restore position (so we don't advance when just tweaking settings)
-                self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, current_pos)
-            else:
-                # If read failed, try to seek back just in case
-                self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, current_pos)
-            
-        # Render frame with effects
-        pixmap = self.renderer.render_task_preview(
-            self.current_task,
-            timestamp,
-            self.preview_label.width(),
-            self.preview_label.height(),
-            base_image=base_pixmap
-        )
+        # Start new worker
+        from ui.workers.preview_worker import PreviewWorker
+        self.preview_worker = PreviewWorker(self.current_task, self.current_timestamp)
+        self.preview_worker.preview_ready.connect(self._on_preview_ready)
+        self.preview_worker.error_occurred.connect(self._on_preview_error)
+        self.preview_worker.start()
         
-        if pixmap:
-            self.current_pixmap = pixmap
-            self._display_pixmap(pixmap)
-
-    def _show_frame_at_position(self, position: int):
-        """Show frame at specific position (0-1000)."""
-        if not self.video_capture or not self.current_task:
-            print("DEBUG: _show_frame_at_position - Missing capture or task")
-            return
+    def _on_preview_ready(self, pixmap: QPixmap):
+        """Handle ready preview."""
+        self.current_pixmap = pixmap
+        self._display_pixmap(pixmap)
         
-        # Calculate frame number
-        total_frames = int(self.video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_number = int((position / 1000.0) * total_frames)
+    def _on_preview_error(self, error: str):
+        """Handle preview error."""
+        # print(f"Preview error: {error}")
+        pass
         
-        print(f"DEBUG: _show_frame_at_position - Position: {position}, Frame: {frame_number}/{total_frames}")
-        
-        # Seek to frame
-        self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-        
-        # Instead of reading raw frame, use renderer
-        self.refresh_preview()
-        
-
-    
     def _init_ui(self):
         """Initialize UI components."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
         
         # Info label (overlay or top corner)
         header_layout = QHBoxLayout()
@@ -142,15 +103,42 @@ class PreviewPlayerWidget(QWidget):
         self._show_placeholder()
         layout.addWidget(self.preview_label, 1)
         
-
-    
+        # Controls Layout
+        controls_layout = QHBoxLayout()
+        controls_layout.setSpacing(10)
+        
+        # Time Label (Current)
+        self.time_current_label = QLabel("00:00")
+        self.time_current_label.setFixedWidth(40)
+        self.time_current_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        controls_layout.addWidget(self.time_current_label)
+        
+        # Slider
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(0, 1000)
+        self.slider.setEnabled(False)
+        self.slider.sliderPressed.connect(self._on_slider_pressed)
+        self.slider.sliderMoved.connect(self._on_slider_moved)
+        self.slider.sliderReleased.connect(self._on_slider_released)
+        controls_layout.addWidget(self.slider)
+        
+        # Time Label (Total)
+        self.time_total_label = QLabel("00:00")
+        self.time_total_label.setFixedWidth(40)
+        controls_layout.addWidget(self.time_total_label)
+        
+        layout.addLayout(controls_layout)
+        
     def set_task(self, task: Optional[VideoTask]):
         """Set the current task to preview."""
         self.current_task = task
+        self.current_timestamp = 0.0
         
         if task is None:
             self._show_placeholder()
-            self._close_video()
+            self.slider.setEnabled(False)
+            self.time_current_label.setText("00:00")
+            self.time_total_label.setText("00:00")
             return
         
         # Update info
@@ -159,25 +147,35 @@ class PreviewPlayerWidget(QWidget):
             self.info_label.setText(f"{w}x{h}")
         else:
             self.info_label.setText("")
+            
+        # Enable controls
+        self.slider.setEnabled(True)
+        self.slider.setValue(0)
         
-
+        # Update duration label
+        duration = task.duration if task.duration else 0
+        self.time_total_label.setText(format_duration(duration))
+        self._update_time_label()
         
-        # Load video for preview
+        # Load video for preview (just show first frame)
         self._load_video(task.input_path)
     
     def set_render_preview(self, pixmap: QPixmap, timestamp: float):
         """
         Set preview frame during rendering.
-        
-        Args:
-            pixmap: Frame to display
-            timestamp: Current timestamp in seconds
         """
         self.is_rendering = True
         self.current_pixmap = pixmap
+        self.current_timestamp = timestamp
         self._display_pixmap(pixmap)
         
-
+        # Update slider/time if rendering
+        if self.current_task and self.current_task.duration > 0:
+            pos = int((timestamp / self.current_task.duration) * 1000)
+            self.slider.blockSignals(True)
+            self.slider.setValue(pos)
+            self.slider.blockSignals(False)
+            self._update_time_label()
     
     def clear_render_preview(self):
         """Clear render preview and return to input preview."""
@@ -189,51 +187,13 @@ class PreviewPlayerWidget(QWidget):
     
     def _load_video(self, video_path: Path):
         """Load video file for preview."""
-        self._close_video()
-        
         if not video_path.exists():
             self._show_placeholder("Video file not found")
             return
         
-        try:
-            self.video_capture = cv2.VideoCapture(str(video_path))
-            
-            if not self.video_capture.isOpened():
-                self._show_placeholder("Failed to open video")
-                self._close_video()
-                return
-            
-            # Check if video has frames
-            total_frames = int(self.video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            if total_frames <= 0:
-                self._show_placeholder("Video has no frames")
-                self._close_video()
-                return
-            
-            # Extract and show first frame
-            self._show_frame_at_position(0)
-            
-        except Exception as e:
-            print(f"Error loading video: {e}")
-            self._show_placeholder(f"Error: {str(e)}")
-            self._close_video()
-    
-    def _show_frame_at_position(self, position: int):
-        """Show frame at specific position (0-1000)."""
-        if not self.video_capture or not self.current_task:
-            return
-        
-        # Calculate frame number
-        total_frames = int(self.video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_number = int((position / 1000.0) * total_frames)
-        
-        # Seek to frame
-        self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-        
-        # Instead of reading raw frame, use renderer
+        # Show first frame
+        self.current_timestamp = 0.0
         self.refresh_preview()
-        
-
     
     def _display_pixmap(self, pixmap: QPixmap):
         """Display pixmap scaled to fit preview area."""
@@ -262,17 +222,36 @@ class PreviewPlayerWidget(QWidget):
             }
         """)
     
-    def _close_video(self):
-        """Close video capture."""
-        if self.video_capture:
-            self.video_capture.release()
-            self.video_capture = None
-    
-
-    
     def resizeEvent(self, event):
         """Handle resize event."""
         super().resizeEvent(event)
         # Redisplay current pixmap at new size
         if self.current_pixmap:
             self._display_pixmap(self.current_pixmap)
+
+    # --- Timeline Controls ---
+        
+    def _on_slider_pressed(self):
+        """Slider interaction started."""
+        self.is_scrubbing = True
+            
+    def _on_slider_moved(self, position):
+        """Slider moved by user."""
+        if not self.current_task or self.current_task.duration <= 0:
+            return
+            
+        self.current_timestamp = (position / 1000.0) * self.current_task.duration
+        self._update_time_label()
+        
+        # Throttle preview updates during scrubbing if needed
+        # For now, we rely on the worker cancellation logic to handle rapid updates
+        self.refresh_preview()
+        
+    def _on_slider_released(self):
+        """Slider interaction ended."""
+        self.is_scrubbing = False
+            
+    def _update_time_label(self):
+        """Update current time label."""
+        self.time_current_label.setText(format_duration(self.current_timestamp))
+
