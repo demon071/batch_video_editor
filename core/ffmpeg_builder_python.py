@@ -143,55 +143,69 @@ class FFmpegPythonBuilder:
             # Create background layer based on type
             if bg_type == 'color':
                 # Color background
-                bg_color = bg_settings.get('background_color', '#000000').lstrip('#')
-                # Convert hex to RGB
-                r = int(bg_color[0:2], 16)
-                g = int(bg_color[2:4], 16)
-                b = int(bg_color[4:6], 16)
-                color_str = f"0x{bg_color}"
+                bg_color = bg_settings.get('background_color', '#000000')
+                # Convert #RRGGBB to 0xRRGGBB for FFmpeg compatibility
+                if bg_color.startswith('#'):
+                    bg_color = '0x' + bg_color.lstrip('#')
                 
                 # Create color source
                 background_layer = ffmpeg.input(
-                    f'color=c={color_str}:s={target_width}x{target_height}:d={bg_duration}',
+                    f'color=c={bg_color}:s={target_width}x{target_height}:d={bg_duration}',
                     f='lavfi'
                 ).video
                 
             elif bg_type == 'image':
-                # Image background
+                # Image background - scale to fill and crop center
                 bg_path = bg_settings.get('background_path')
                 if bg_path and Path(bg_path).exists():
                     bg_img = ffmpeg.input(str(bg_path), loop=1, t=bg_duration)
-                    background_layer = bg_img.video.filter('scale', target_width, target_height)
+                    # Scale to fill (one dimension will exceed target)
+                    bg_scaled = bg_img.video.filter('scale', target_width, target_height, force_original_aspect_ratio='increase')
+                    # Crop to exact size (center crop)
+                    background_layer = bg_scaled.filter('crop', target_width, target_height, '(iw-ow)/2', '(ih-oh)/2')
                     
             elif bg_type == 'video':
-                # Video background
+                # Video background - scale to fill and crop center
                 bg_path = bg_settings.get('background_path')
                 if bg_path and Path(bg_path).exists():
                     bg_vid = ffmpeg.input(str(bg_path), stream_loop=-1)
-                    background_layer = bg_vid.video.filter('scale', target_width, target_height)
+                    # Scale to fill (one dimension will exceed target)
+                    bg_scaled = bg_vid.video.filter('scale', target_width, target_height, force_original_aspect_ratio='increase')
+                    # Crop to exact size (center crop)
+                    background_layer = bg_scaled.filter('crop', target_width, target_height, '(iw-ow)/2', '(ih-oh)/2')
             
             # If background layer was created, scale main video to fit and overlay
             if background_layer:
-                # Scale main video to fit within target resolution (letterbox/pillarbox)
-                # Use scale with force_original_aspect_ratio=decrease to fit within bounds
-                # Then pad to center it
-                video_stream = video_stream.filter(
-                    'scale', 
-                    target_width,
-                    target_height,
-                    force_original_aspect_ratio='decrease'
-                )
-                video_stream = video_stream.filter(
-                    'pad',
-                    target_width,
-                    target_height,
-                    '(ow-iw)/2',
-                    '(oh-ih)/2',
-                    color='black'
-                )
+                # Smart aspect-aware scaling based on video vs background orientation
+                # Get original video resolution
+                if task.original_resolution:
+                    video_w, video_h = task.original_resolution
+                else:
+                    # Fallback if resolution unknown
+                    video_w, video_h = 1920, 1080
                 
-                # Overlay scaled video on background
-                video_stream = ffmpeg.overlay(background_layer, video_stream)
+                # Calculate aspect ratios
+                video_aspect = video_w / video_h if video_h > 0 else 1.0
+                bg_aspect = target_width / target_height if target_height > 0 else 1.0
+                
+                # Determine scaling strategy based on orientation mismatch
+                if video_aspect < 1.0 and bg_aspect > 1.0:
+                    # Video is portrait, background is landscape -> constrain height
+                    video_stream = video_stream.filter('scale', -1, target_height)
+                elif video_aspect > 1.0 and bg_aspect < 1.0:
+                    # Video is landscape, background is portrait -> constrain width
+                    video_stream = video_stream.filter('scale', target_width, -1)
+                else:
+                    # Same orientation or square -> use force_original_aspect_ratio
+                    video_stream = video_stream.filter(
+                        'scale', 
+                        target_width,
+                        target_height,
+                        force_original_aspect_ratio='decrease'
+                    )
+                
+                # Overlay scaled video on background (centered)
+                video_stream = ffmpeg.overlay(background_layer, video_stream, x='(W-w)/2', y='(H-h)/2', shortest=1)
         
         # Apply basic video processing to main stream first
         # Note: We skip text overlay here to apply it BEFORE concat if possible, 

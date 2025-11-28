@@ -47,29 +47,38 @@ class MainWindow(QMainWindow):
         # Create toolbar
         self._create_toolbar()
         
-        # Central widget with 3-panel layout
+        # Central widget with 2-column layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Main splitter (3 panels: left | center | right)
+        # Main horizontal splitter (2 columns: Properties | Preview+Tasks)
         self.main_splitter = QSplitter(Qt.Horizontal)
         
-        # LEFT PANEL: Project Browser
-        self.project_browser = ProjectBrowserWidget()
-        self.main_splitter.addWidget(self.project_browser)
-        
-        # CENTER PANEL: Preview Player
-        self.preview_player = PreviewPlayerWidget()
-        self.main_splitter.addWidget(self.preview_player)
-        
-        # RIGHT PANEL: Properties
+        # LEFT COLUMN: Properties Panel (Settings/Filters)
         self.properties_panel = PropertiesPanelWidget()
         self.main_splitter.addWidget(self.properties_panel)
         
-        # Set initial sizes (25% | 50% | 25%)
-        self.main_splitter.setSizes([350, 700, 350])
+        # RIGHT COLUMN: Vertical splitter (Preview on top, Tasks on bottom)
+        self.right_splitter = QSplitter(Qt.Vertical)
+        
+        # Top: Preview Player
+        self.preview_player = PreviewPlayerWidget()
+        self.right_splitter.addWidget(self.preview_player)
+        
+        # Bottom: Project Browser (Task List)
+        self.project_browser = ProjectBrowserWidget()
+        self.right_splitter.addWidget(self.project_browser)
+        
+        # Set vertical split sizes (60% preview, 40% tasks)
+        self.right_splitter.setSizes([600, 400])
+        
+        # Add right splitter to main splitter
+        self.main_splitter.addWidget(self.right_splitter)
+        
+        # Set horizontal split sizes (30% properties, 70% preview+tasks)
+        self.main_splitter.setSizes([400, 1000])
         
         main_layout.addWidget(self.main_splitter)
         
