@@ -55,14 +55,6 @@ class QualityMode(Enum):
         return self.name
 
 
-class WatermarkType(Enum):
-    """Type of watermark to apply."""
-    NONE = auto()
-    TEXT = auto()
-    IMAGE = auto()
-
-    def __str__(self):
-        return self.name.capitalize()
 
 
 class TextPosition(str, Enum):

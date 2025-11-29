@@ -7,7 +7,7 @@ from typing import List, Optional, Dict, Any, Tuple
 import ffmpeg
 from models.video_task import VideoTask
 from models.text_settings import TextSettings
-from models.enums import VideoCodec, QualityMode, WatermarkType, OverlayPosition
+from models.enums import VideoCodec, QualityMode, OverlayPosition
 from utils.font_utils import get_default_font
 
 
@@ -325,10 +325,7 @@ class PreviewBuilder:
             pts_multiplier = 1.0 / task.speed
             stream = stream.filter('setpts', f'{pts_multiplier}*PTS')
             
-        if task.watermark_type == WatermarkType.TEXT and task.watermark_text:
-            x, y = task.watermark_position
-            txt = task.watermark_text
-            stream = stream.filter('drawtext', text=txt, x=x, y=y, fontsize=24, fontcolor='white', borderw=2, bordercolor='black')
+
             
         if not skip_text and task.text_settings and task.text_settings.is_active():
             drawtext_args = PreviewBuilder._get_drawtext_args(task.text_settings, task)

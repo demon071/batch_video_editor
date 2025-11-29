@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Tuple, TYPE_CHECKING
-from .enums import TaskStatus, VideoCodec, Preset, QualityMode, WatermarkType
+from .enums import TaskStatus, VideoCodec, Preset, QualityMode
 
 if TYPE_CHECKING:
     from .text_settings import TextSettings
@@ -29,14 +29,11 @@ class VideoTask:
         scale: Target resolution as (width, height) tuple (None = original)
         crop: Crop region as (x, y, width, height) tuple (None = no crop)
         
-        # Watermark settings
-        watermark_type: Type of watermark (NONE, TEXT, IMAGE)
-        watermark_text: Text to display (if watermark_type is TEXT)
-        watermark_image: Path to watermark image (if watermark_type is IMAGE)
-        watermark_position: Position as (x, y) tuple
-        
+
         # Subtitle settings
         subtitle_file: Path to SRT subtitle file (None = no subtitles)
+        auto_generate_subtitle: Boolean to auto-generate subtitle using Whisper
+        whisper_config: Optional dict for task-specific whisper settings
         
         # Codec settings
         codec: Video codec to use
@@ -65,14 +62,11 @@ class VideoTask:
     scale: Optional[Tuple[int, int]] = None
     crop: Optional[Tuple[int, int, int, int]] = None
     
-    # Watermark settings
-    watermark_type: WatermarkType = WatermarkType.NONE
-    watermark_text: str = ""
-    watermark_image: Optional[Path] = None
-    watermark_position: Tuple[int, int] = (10, 10)
-    
+
     # Subtitle settings
     subtitle_file: Optional[Path] = None
+    auto_generate_subtitle: bool = False
+    whisper_config: Optional[dict] = None
     
     # Text overlay settings
     text_settings: Optional['TextSettings'] = None
@@ -113,8 +107,7 @@ class VideoTask:
             self.input_path = Path(self.input_path)
         if isinstance(self.output_path, str):
             self.output_path = Path(self.output_path)
-        if self.watermark_image and isinstance(self.watermark_image, str):
-            self.watermark_image = Path(self.watermark_image)
+
         if self.subtitle_file and isinstance(self.subtitle_file, str):
             self.subtitle_file = Path(self.subtitle_file)
     

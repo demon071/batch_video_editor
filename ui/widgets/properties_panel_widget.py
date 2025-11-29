@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTabWidget, QPushButton,
                              QScrollArea, QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSignal
 
+from config.settings import AppConfig
 from ui.widgets import (ProcessingParamsPanel, CodecSettingsPanel,
                         TextOverlayPanel, ImageOverlayPanel, VideoOverlayPanel,
                         IntroVideoPanel, OutroVideoPanel, StackingPanel,
@@ -29,8 +30,9 @@ class PropertiesPanelWidget(QWidget):
     settings_changed = pyqtSignal()
     apply_to_all_requested = pyqtSignal()
     
-    def __init__(self, parent=None):
+    def __init__(self, config: AppConfig = None, parent=None):
         super().__init__(parent)
+        self.config = config or AppConfig()
         self._init_ui()
     
     def _init_ui(self):
@@ -78,7 +80,9 @@ class PropertiesPanelWidget(QWidget):
         general_content_layout.setContentsMargins(5, 5, 5, 5)
         general_content_layout.setSpacing(10)
         
-        self.params_panel = ProcessingParamsPanel()
+        general_content_layout.setSpacing(10)
+        
+        self.params_panel = ProcessingParamsPanel(self.config)
         general_content_layout.addWidget(self.params_panel)
         
         self.codec_panel = CodecSettingsPanel()

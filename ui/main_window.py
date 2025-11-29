@@ -446,34 +446,6 @@ class MainWindow(QMainWindow):
             }
         """)
     
-    def _connect_signals(self):
-        """Connect signals and slots."""
-        # Project browser signals
-        self.project_browser.task_selected.connect(self._on_task_selected)
-        self.project_browser.task_add_requested.connect(self._add_files)
-        self.project_browser.task_remove_requested.connect(self._remove_task)
-        self.project_browser.task_view_settings_requested.connect(self._view_task_settings)
-        self.project_browser.task_retry_requested.connect(self._retry_task)
-        self.project_browser.task_open_output_requested.connect(self._open_output_folder)
-        
-        # Properties panel signals
-        self.properties_panel.settings_changed.connect(self._on_settings_changed)
-        self.properties_panel.apply_to_all_requested.connect(self._apply_settings_to_all)
-        
-        # Codec panel settings changed
-        codec_panel = self.properties_panel.get_codec_panel()
-        codec_panel.settings_changed.connect(self._save_codec_settings)
-        
-        # Queue manager signals
-        self.queue_manager.queue_started.connect(self._on_queue_started)
-        self.queue_manager.queue_paused.connect(self._on_queue_paused)
-        self.queue_manager.queue_completed.connect(self._on_queue_completed)
-        self.queue_manager.task_started.connect(self._on_task_started)
-        self.queue_manager.task_progress.connect(self._on_task_progress)
-        self.queue_manager.task_completed.connect(self._on_task_completed)
-        self.queue_manager.task_failed.connect(self._on_task_failed)
-        self.queue_manager.task_added.connect(self._on_task_added)
-    
     def _load_config(self):
         """Load configuration."""
         # Load last used folders
@@ -494,10 +466,12 @@ class MainWindow(QMainWindow):
         codec_panel.blockSignals(False)
         
         # Check GPU support
+        from utils.system_check import check_nvenc_support
         gpu_available, gpu_msg = check_nvenc_support()
         codec_panel.set_gpu_available(gpu_available)
         
         # Check FFmpeg
+        from utils.system_check import check_ffmpeg
         ffmpeg_available, ffmpeg_msg = check_ffmpeg()
         if ffmpeg_available:
             self._update_status(f"Ready - {ffmpeg_msg} - {gpu_msg}")
@@ -652,10 +626,7 @@ class MainWindow(QMainWindow):
             'volume': params_panel.get_volume(),
             'scale': params_panel.get_scale(),
             'crop': params_panel.get_crop(),
-            'watermark_type': params_panel.get_watermark_type(),
-            'watermark_image': params_panel.get_watermark_image(),
-            'watermark_position': params_panel.get_watermark_position(),
-            'watermark_text': params_panel.get_watermark_text(),
+
             'subtitle_file': params_panel.get_subtitle_file(),
             'codec': codec_panel.get_codec(),
             'quality_mode': codec_panel.get_quality_mode(),
@@ -721,10 +692,7 @@ class MainWindow(QMainWindow):
         task.cut_from_end = params_panel.get_cut_from_end()
         task.target_resolution = params_panel.get_scale()
         task.crop = params_panel.get_crop()
-        task.watermark_type = params_panel.get_watermark_type()
-        task.watermark_text = params_panel.get_watermark_text()
-        task.watermark_image = params_panel.get_watermark_image()
-        task.watermark_position = params_panel.get_watermark_position()
+
         task.subtitle_file = params_panel.get_subtitle_file()
         
         # Codec Settings
@@ -740,6 +708,34 @@ class MainWindow(QMainWindow):
         
         # Update project browser display (e.g. duration might change)
         self.project_browser.update_task(task)
+
+    def _connect_signals(self):
+        """Connect signals and slots."""
+        # Project browser signals
+        self.project_browser.task_selected.connect(self._on_task_selected)
+        self.project_browser.task_add_requested.connect(self._add_files)
+        self.project_browser.task_remove_requested.connect(self._remove_task)
+        self.project_browser.task_view_settings_requested.connect(self._view_task_settings)
+        self.project_browser.task_retry_requested.connect(self._retry_task)
+        self.project_browser.task_open_output_requested.connect(self._open_output_folder)
+        
+        # Properties panel signals
+        self.properties_panel.settings_changed.connect(self._on_settings_changed)
+        self.properties_panel.apply_to_all_requested.connect(self._apply_settings_to_all)
+        
+        # Codec panel settings changed
+        codec_panel = self.properties_panel.get_codec_panel()
+        codec_panel.settings_changed.connect(self._save_codec_settings)
+        
+        # Queue manager signals
+        self.queue_manager.queue_started.connect(self._on_queue_started)
+        self.queue_manager.queue_paused.connect(self._on_queue_paused)
+        self.queue_manager.queue_completed.connect(self._on_queue_completed)
+        self.queue_manager.task_started.connect(self._on_task_started)
+        self.queue_manager.task_progress.connect(self._on_task_progress)
+        self.queue_manager.task_completed.connect(self._on_task_completed)
+        self.queue_manager.task_failed.connect(self._on_task_failed)
+        self.queue_manager.task_added.connect(self._on_task_added)
 
     def _apply_settings_to_all(self):
         """Apply current UI settings to all loaded tasks."""
@@ -779,9 +775,7 @@ class MainWindow(QMainWindow):
             task.volume = params_panel.get_volume()
             task.scale = params_panel.get_scale()
             task.crop = params_panel.get_crop()
-            task.watermark_type = params_panel.get_watermark_type()
-            task.watermark_image = params_panel.get_watermark_image()
-            task.watermark_position = params_panel.get_watermark_position()
+
             task.subtitle_file = params_panel.get_subtitle_file()
             
             trim_start = params_panel.get_trim_start()
@@ -925,6 +919,8 @@ class MainWindow(QMainWindow):
     def _on_task_selected(self, task: VideoTask):
         """Handle task selection."""
         self.preview_player.set_task(task)
+        # Update params panel with current input file for Whisper
+        self.params_panel.set_input_file(task.input_path)
     
     @pyqtSlot()
     def _on_queue_started(self):

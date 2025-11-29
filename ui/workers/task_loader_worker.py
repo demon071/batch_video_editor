@@ -44,10 +44,7 @@ class TaskLoaderWorker(QThread):
                     volume=self.settings.get('volume', 1.0),
                     scale=self.settings.get('scale'),
                     crop=self.settings.get('crop'),
-                    watermark_type=self.settings.get('watermark_type'),
-                    watermark_image=self.settings.get('watermark_image'),
-                    watermark_position=self.settings.get('watermark_position'),
-                    watermark_text=self.settings.get('watermark_text'),
+
                     subtitle_file=self.settings.get('subtitle_file'),
                     codec=self.settings.get('codec'),
                     quality_mode=self.settings.get('quality_mode'),

@@ -391,9 +391,7 @@ class MainWindow(QMainWindow):
                 volume=self.params_panel.get_volume(),
                 scale=self.params_panel.get_scale(),
                 crop=self.params_panel.get_crop(),
-                watermark_type=self.params_panel.get_watermark_type(),
-                watermark_image=self.params_panel.get_watermark_image(),
-                watermark_position=self.params_panel.get_watermark_position(),
+
                 subtitle_file=self.params_panel.get_subtitle_file(),
                 codec=self.codec_panel.get_codec(),
                 quality_mode=self.codec_panel.get_quality_mode(),
@@ -462,8 +460,7 @@ class MainWindow(QMainWindow):
             f"Apply current settings to all {len(tasks)} tasks?\n\n"
             "This will update:\n"
             "• Processing parameters (speed, volume, trim, scale, crop)\n"
-            "• Text overlay settings\n"
-            "• Watermark settings\n"
+
             "• Codec and quality settings",
             QMessageBox.Yes | QMessageBox.No
         )
@@ -478,10 +475,7 @@ class MainWindow(QMainWindow):
             task.volume = self.params_panel.get_volume()
             task.scale = self.params_panel.get_scale()
             task.crop = self.params_panel.get_crop()
-            task.watermark_type = self.params_panel.get_watermark_type()
-            task.watermark_text = self.params_panel.get_watermark_text()
-            task.watermark_image = self.params_panel.get_watermark_image()
-            task.watermark_position = self.params_panel.get_watermark_position()
+
             task.subtitle_file = self.params_panel.get_subtitle_file()
             
             # Update trim times

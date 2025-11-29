@@ -5,22 +5,27 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                              QDoubleSpinBox)
 from PyQt5.QtCore import Qt, pyqtSignal
 from pathlib import Path
-from models.enums import WatermarkType
+
+from config.settings import AppConfig
+from ui.dialogs.whisper_settings_dialog import WhisperSettingsDialog
+
 
 
 class ProcessingParamsPanel(QWidget):
     """
     Panel for configuring video processing parameters.
     
-    Includes controls for speed, volume, trim, scale, crop, watermark, and subtitle.
+    Includes controls for speed, volume, trim, scale, crop, and subtitle.
     """
     
     # Signals
     params_changed = pyqtSignal()
     
-    def __init__(self, parent=None):
+    def __init__(self, config: AppConfig = None, parent=None):
         """Initialize parameters panel."""
         super().__init__(parent)
+        self.config = config or AppConfig()
+        self.current_input_file = None
         self._init_ui()
     
     def _init_ui(self):
@@ -137,64 +142,7 @@ class ProcessingParamsPanel(QWidget):
         crop_group.setLayout(crop_layout)
         layout.addWidget(crop_group)
         
-        # Watermark control
-        watermark_group = QGroupBox("Watermark")
-        watermark_layout = QVBoxLayout()
-        
-        # Watermark type
-        type_layout = QHBoxLayout()
-        self.watermark_none_radio = QRadioButton("None")
-        self.watermark_text_radio = QRadioButton("Text")
-        self.watermark_image_radio = QRadioButton("Image")
-        self.watermark_none_radio.setChecked(True)
-        
-        self.watermark_group_buttons = QButtonGroup()
-        self.watermark_group_buttons.addButton(self.watermark_none_radio, 0)
-        self.watermark_group_buttons.addButton(self.watermark_text_radio, 1)
-        self.watermark_group_buttons.addButton(self.watermark_image_radio, 2)
-        
-        type_layout.addWidget(self.watermark_none_radio)
-        type_layout.addWidget(self.watermark_text_radio)
-        type_layout.addWidget(self.watermark_image_radio)
-        watermark_layout.addLayout(type_layout)
-        
-        # Text watermark
-        self.watermark_text_edit = QLineEdit()
-        self.watermark_text_edit.setPlaceholderText("Watermark text")
-        self.watermark_text_edit.setEnabled(False)
-        watermark_layout.addWidget(self.watermark_text_edit)
-        
-        # Image watermark
-        image_layout = QHBoxLayout()
-        self.watermark_image_edit = QLineEdit()
-        self.watermark_image_edit.setPlaceholderText("Watermark image path")
-        self.watermark_image_edit.setEnabled(False)
-        self.watermark_image_btn = QPushButton("Browse...")
-        self.watermark_image_btn.setEnabled(False)
-        self.watermark_image_btn.clicked.connect(self._browse_watermark_image)
-        image_layout.addWidget(self.watermark_image_edit)
-        image_layout.addWidget(self.watermark_image_btn)
-        watermark_layout.addLayout(image_layout)
-        
-        # Position
-        pos_layout = QHBoxLayout()
-        pos_layout.addWidget(QLabel("Position X:"))
-        self.watermark_x_spin = QSpinBox()
-        self.watermark_x_spin.setMaximum(9999)
-        self.watermark_x_spin.setValue(10)
-        pos_layout.addWidget(self.watermark_x_spin)
-        pos_layout.addWidget(QLabel("Y:"))
-        self.watermark_y_spin = QSpinBox()
-        self.watermark_y_spin.setMaximum(9999)
-        self.watermark_y_spin.setValue(10)
-        pos_layout.addWidget(self.watermark_y_spin)
-        watermark_layout.addLayout(pos_layout)
-        
-        # Connect watermark type changes
-        self.watermark_group_buttons.buttonClicked.connect(self._on_watermark_type_changed)
-        
-        watermark_group.setLayout(watermark_layout)
-        layout.addWidget(watermark_group)
+
         
         # Subtitle control
         subtitle_group = QGroupBox("Subtitle")
@@ -205,8 +153,13 @@ class ProcessingParamsPanel(QWidget):
         self.subtitle_btn = QPushButton("Browse...")
         self.subtitle_btn.clicked.connect(self._browse_subtitle)
         
+        self.generate_sub_btn = QPushButton("Generate...")
+        self.generate_sub_btn.setToolTip("Generate subtitle using Whisper")
+        self.generate_sub_btn.clicked.connect(self._open_whisper_dialog)
+        
         subtitle_layout.addWidget(self.subtitle_edit)
         subtitle_layout.addWidget(self.subtitle_btn)
+        subtitle_layout.addWidget(self.generate_sub_btn)
         subtitle_group.setLayout(subtitle_layout)
         layout.addWidget(subtitle_group)
         
@@ -220,10 +173,7 @@ class ProcessingParamsPanel(QWidget):
         self.crop_width_spin.valueChanged.connect(lambda: self.params_changed.emit())
         self.crop_height_spin.valueChanged.connect(lambda: self.params_changed.emit())
         
-        self.watermark_text_edit.textChanged.connect(lambda: self.params_changed.emit())
-        self.watermark_image_edit.textChanged.connect(lambda: self.params_changed.emit())
-        self.watermark_x_spin.valueChanged.connect(lambda: self.params_changed.emit())
-        self.watermark_y_spin.valueChanged.connect(lambda: self.params_changed.emit())
+
         
         self.subtitle_edit.textChanged.connect(lambda: self.params_changed.emit())
         
@@ -240,28 +190,7 @@ class ProcessingParamsPanel(QWidget):
         self.volume_label.setText(f"{value}%")
         self.params_changed.emit()
     
-    def _on_watermark_type_changed(self):
-        """Handle watermark type change."""
-        is_text = self.watermark_text_radio.isChecked()
-        is_image = self.watermark_image_radio.isChecked()
-        
-        self.watermark_text_edit.setEnabled(is_text)
-        self.watermark_image_edit.setEnabled(is_image)
-        self.watermark_image_btn.setEnabled(is_image)
-        
-        self.params_changed.emit()
-    
-    def _browse_watermark_image(self):
-        """Browse for watermark image."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Watermark Image",
-            "",
-            "Images (*.png *.jpg *.jpeg *.bmp)"
-        )
-        if file_path:
-            self.watermark_image_edit.setText(file_path)
-            self.params_changed.emit()
+
     
     def _browse_subtitle(self):
         """Browse for subtitle file."""
@@ -274,6 +203,22 @@ class ProcessingParamsPanel(QWidget):
         if file_path:
             self.subtitle_edit.setText(file_path)
             self.params_changed.emit()
+            
+    def _open_whisper_dialog(self):
+        """Open Whisper settings dialog."""
+        dialog = WhisperSettingsDialog(self.config, self.current_input_file, self)
+        dialog.subtitle_generated.connect(self._on_subtitle_generated)
+        dialog.exec_()
+        
+    def _on_subtitle_generated(self, srt_path: Path):
+        """Handle generated subtitle."""
+        self.subtitle_edit.setText(str(srt_path))
+        self.params_changed.emit()
+        
+    def set_input_file(self, file_path: Path):
+        """Set current input file for Whisper generation."""
+        self.current_input_file = file_path
+        self.generate_sub_btn.setEnabled(file_path is not None and file_path.exists())
     
     # Getters
     
@@ -319,27 +264,7 @@ class ProcessingParamsPanel(QWidget):
             self.crop_height_spin.value()
         )
     
-    def get_watermark_type(self) -> WatermarkType:
-        """Get watermark type."""
-        if self.watermark_text_radio.isChecked():
-            return WatermarkType.TEXT
-        elif self.watermark_image_radio.isChecked():
-            return WatermarkType.IMAGE
-        else:
-            return WatermarkType.NONE
-    
-    def get_watermark_text(self) -> str:
-        """Get watermark text."""
-        return self.watermark_text_edit.text().strip()
-    
-    def get_watermark_image(self) -> Path:
-        """Get watermark image path."""
-        path_str = self.watermark_image_edit.text().strip()
-        return Path(path_str) if path_str else None
-    
-    def get_watermark_position(self):
-        """Get watermark position."""
-        return (self.watermark_x_spin.value(), self.watermark_y_spin.value())
+
     
     def get_subtitle_file(self) -> Path:
         """Get subtitle file path."""

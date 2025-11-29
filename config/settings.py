@@ -24,6 +24,12 @@ class AppConfig:
         'volume': 1.0,
         'use_gpu_decoding': False,
         'window_geometry': None,
+        'whisper_cli_path': '',
+        'whisper_model': 'small',
+        'whisper_language': 'auto',
+        'whisper_device': 'cpu',
+        'whisper_threads': 4,
+        'whisper_word_count': 1,
     }
     
     def __init__(self, config_path: Optional[Path] = None):
@@ -200,3 +206,65 @@ class AppConfig:
     def use_gpu_decoding(self, value: bool):
         """Set GPU decoding preference."""
         self.set('use_gpu_decoding', value)
+
+    # Whisper Settings
+    
+    @property
+    def whisper_cli_path(self) -> str:
+        """Get Whisper CLI path."""
+        return self.get('whisper_cli_path', '')
+    
+    @whisper_cli_path.setter
+    def whisper_cli_path(self, value: str):
+        """Set Whisper CLI path."""
+        self.set('whisper_cli_path', value)
+        
+    @property
+    def whisper_model(self) -> str:
+        """Get Whisper model."""
+        return self.get('whisper_model', 'small')
+    
+    @whisper_model.setter
+    def whisper_model(self, value: str):
+        """Set Whisper model."""
+        self.set('whisper_model', value)
+        
+    @property
+    def whisper_language(self) -> str:
+        """Get Whisper language."""
+        return self.get('whisper_language', 'auto')
+    
+    @whisper_language.setter
+    def whisper_language(self, value: str):
+        """Set Whisper language."""
+        self.set('whisper_language', value)
+        
+    @property
+    def whisper_device(self) -> str:
+        """Get Whisper device."""
+        return self.get('whisper_device', 'cpu')
+    
+    @whisper_device.setter
+    def whisper_device(self, value: str):
+        """Set Whisper device."""
+        self.set('whisper_device', value)
+        
+    @property
+    def whisper_threads(self) -> int:
+        """Get Whisper threads."""
+        return self.get('whisper_threads', 4)
+    
+    @whisper_threads.setter
+    def whisper_threads(self, value: int):
+        """Set Whisper threads."""
+        self.set('whisper_threads', value)
+        
+    @property
+    def whisper_word_count(self) -> int:
+        """Get Whisper max word count per segment."""
+        return self.get('whisper_word_count', 1)
+    
+    @whisper_word_count.setter
+    def whisper_word_count(self, value: int):
+        """Set Whisper max word count per segment."""
+        self.set('whisper_word_count', value)

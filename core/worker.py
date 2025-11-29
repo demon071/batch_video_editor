@@ -172,11 +172,8 @@ class FFmpegWorker(QObject):
                 cut_from_end=self.task.cut_from_end,
                 scale=self.task.scale,
                 crop=self.task.crop,
-                # Copy watermark settings
-                watermark_type=self.task.watermark_type,
-                watermark_text=self.task.watermark_text,
-                watermark_image=self.task.watermark_image,
-                watermark_position=self.task.watermark_position,
+
+
                 # Copy subtitle settings
                 subtitle_file=self.task.subtitle_file,
                 # Copy text overlay settings

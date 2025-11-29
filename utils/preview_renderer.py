@@ -365,44 +365,7 @@ class PreviewRenderer:
             scale_x = scaled_frame.width() / w
             scale_y = scaled_frame.height() / h
             
-        # Apply Watermark
-        from models.enums import WatermarkType
-        
-        # Check if watermark is enabled (handle both Enum and string "None")
-        is_watermark_enabled = False
-        if isinstance(task.watermark_type, WatermarkType):
-            is_watermark_enabled = task.watermark_type != WatermarkType.NONE
-        else:
-            is_watermark_enabled = str(task.watermark_type) != "None"
-            
-        if is_watermark_enabled:
-            
-            # Text Watermark
-            # Handle string comparison if needed
-            is_text_type = task.watermark_type == WatermarkType.TEXT or str(task.watermark_type) == "WatermarkType.TEXT" or str(task.watermark_type) == "Text"
-            
-            if is_text_type and task.watermark_text:
-                font = QFont()
-                # Rough font size estimation
-                font_size = 36 * min(scale_x, scale_y) 
-                font.setPixelSize(int(font_size))
-                painter.setFont(font)
-                painter.setPen(QColor("white"))
-                
-                wx, wy = task.watermark_position
-                painter.drawText(int(wx * scale_x), int(wy * scale_y), task.watermark_text)
-                
-            # Image Watermark
-            elif task.watermark_type == WatermarkType.IMAGE and task.watermark_image:
-                if task.watermark_image.exists():
-                    wm_pixmap = QPixmap(str(task.watermark_image))
-                    if not wm_pixmap.isNull():
-                        # Scale watermark (e.g. 10% of width)
-                        target_w = int(scaled_frame.width() * 0.15)
-                        wm_scaled = wm_pixmap.scaledToWidth(target_w, Qt.SmoothTransformation)
-                        
-                        wx, wy = task.watermark_position
-                        painter.drawPixmap(int(wx * scale_x), int(wy * scale_y), wm_scaled)
+
 
         # Apply Text Overlays
         # Convert task text settings to temporary layers or render directly

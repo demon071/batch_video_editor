@@ -4,7 +4,7 @@ from typing import List, Optional
 import ffmpeg
 from models.video_task import VideoTask
 from models.text_settings import TextSettings
-from models.enums import VideoCodec, QualityMode, WatermarkType, OverlayPosition
+from models.enums import VideoCodec, QualityMode, OverlayPosition
 from utils.font_utils import get_default_font
 
 
@@ -157,11 +157,7 @@ class FFmpegCommandBuilder:
             pts_multiplier = 1.0 / task.speed
             filters.append(f'setpts={pts_multiplier}*PTS')
         
-        # Watermark (simple text)
-        if task.watermark_type == WatermarkType.TEXT and task.watermark_text:
-            x, y = task.watermark_position
-            text = task.watermark_text.replace("'", "\\'").replace(":", "\\:")
-            filters.append(f"drawtext=text='{text}':x={x}:y={y}:fontsize=24:fontcolor=white:borderw=2:bordercolor=black")
+
         
         # Advanced text overlay
         if task.text_settings and task.text_settings.is_active():
@@ -544,9 +540,7 @@ class FFmpegCommandBuilder:
         if not task.output_path.parent.exists():
             return False, f"Output directory not found: {task.output_path.parent}"
         
-        if task.watermark_type == WatermarkType.IMAGE:
-            if not task.watermark_image or not task.watermark_image.exists():
-                return False, "Watermark image not found"
+
         
         if task.subtitle_file and not task.subtitle_file.exists():
             return False, f"Subtitle file not found: {task.subtitle_file}"
